@@ -1,0 +1,148 @@
+#!/usr/bin/perl
+
+use 5.13.7;
+no if ($] >= 5.018), "warnings" => "experimental";
+
+use Getopt::Long;
+use Config::INI::Reader;
+use Net::LDAP;
+use Data::Dumper;
+use Email::Address::XS;
+#use Time::Out qw(timeout);
+
+# USAGE
+sub usage() {
+    die "usage: $0 [-f config_file]\n";
+}
+
+# STATUS
+my $status = 0;
+
+# CONFIG
+my $config_file = "/etc/table-ldap_perl.ini";
+GetOptions("f=s" => \$config_file,
+           "file=s" => \$config_file)
+    or usage();
+my $config = undef;
+sub config_parse {
+    $config = Config::INI::Reader->read_file($config_file);
+    my $global = ${$config}{"_"};
+    foreach my $domain (keys %{$config}) {
+        unless ($domain eq "_"){
+            my $domain_href = ${$config}{$domain};
+            foreach my $key (keys %{$global}){
+                unless(exists ${$domain_href}{$key}){
+                    ${$domain_href}{$key} = ${$global}{$key};
+                }
+            }
+        }
+}
+}
+
+# LDAP
+my $ldap = undef;
+sub ldap_init {
+    $ldap = Net::LDAP->new( ${$config}{"_"}{"server"} )  or  die "$@";
+    my $mesg = $ldap->bind(${$config}{"_"}{"admin"}, password => ${$config}{"_"}{"password"});
+    $mesg->code and die $mesg->error;
+}
+
+# HELPERS
+
+sub hostname_to_dc {
+    my ($hostname) = @_;
+    $hostname =~ s/\./\,dc\=/g;
+    return "dc=$hostname";
+}
+
+# COMMANDS
+my %commands = ();
+
+$commands{"UPDATE"} = sub {
+    eval {
+        scalar(@_) != 0 and die;
+        config_parse();
+        ldap_init();
+        $status = 1;
+        print "TABLE_RESULT|UPDATED\n";
+    } or do {
+        $status = 0;
+        print "TABLE_RESULT|FAILED\n";
+    }
+};
+
+$commands{"LOOKUP"} = sub {
+    eval {
+        scalar(@_) != 2 and die;
+        $status != 1 and die;
+        my $service = $_[0];
+        my $key = $_[1];
+        given($service){
+            when("ALIAS"){
+                my $address = Email::Address::XS->parse_bare_address($key);
+                $address->is_valid() or die;
+                $key = $address->address();
+                my ($username, $hostname) = $address->split_address();
+                my $dc = hostname_to_dc($hostname);
+                my $aliases = ${$config}{$hostname}{"aliases"};
+                my $alias = ${$config}{$hostname}{"alias"};
+                my $name = ${$config}{$hostname}{"name"};
+                my $srch = $ldap->search(base => "ou=$aliases,$dc", filter => "($alias=$key)");
+                $srch->code and  die $srch->error;
+                my @alias_list = ();
+                foreach my $entry ($srch->entries) {
+                    push @alias_list, $entry->get_value("$name");
+                }
+                print "TABLE_RESULT|", join(",", @alias_list), "\n";
+            }
+            when("CREDENTIALS"){
+                my $address = Email::Address::XS->parse_bare_address($key);
+                $address->is_valid() or die;
+                $key = $address->address();
+                my ($username, $hostname) = $address->split_address();
+                my $dc = hostname_to_dc($hostname);
+                my $srch = $ldap->search(base => "ou=Users,$dc", filter => "(mail=$key)");
+                $srch->code and  die $srch->error;
+                $srch->count != 1 and die;
+                my $entry = ($srch->entries)[0];
+                my $password = $entry->get_value("userPassword");
+                print "TABLE_RESULT|$password\n";
+            }
+            default { print "TABLE_RESULT|FAILED\n";}
+        }
+        1;
+    } or do {
+        print "TABLE_RESULT|FAILED\n";
+    }
+};
+
+$commands{"FETCH"} = sub {
+    eval {
+        scalar(@_) != 1 and die;
+        $status != 1 and die;
+        my $service = $_[0];
+    } or do {
+        print "TABLE_RESULT|FAILED\n";
+    }
+};
+
+# MAIN
+my $line = <STDIN>;
+my @params = $line =~ /TABLE_INIT\|(.+)\|(\d+)/;
+my $proto_version = $params[0];
+my $timeout = $params[1];
+
+config_parse();
+ldap_init();
+$status=1;
+
+print "TABLE_RESULT|READY\n";
+
+foreach $line ( <STDIN> ) {
+    my @terms = split('\|', $line);
+    my $command = $terms[3];
+    if (exists $commands{$command}){
+        my $command_ref = $commands{$command};
+        &$command_ref($terms[5], $terms[6]);
+    }
+}

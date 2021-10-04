@@ -1,0 +1,28 @@
+name: pipeline
+
+on:
+  push:
+    branches:
+      - '*'
+  pull_request:
+    branches:
+      - '*'
+  schedule:
+    - cron: '0 */6 * * *'
+
+env:
+  CC: gcc-10
+  CXX: g++-10
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt-get install -y slapd ldap-utils mandoc libnet-ldap-perl libemail-address-xs-perl libconfig-ini-perl
+    - name: Check man pages
+      run: |
+        mandoc -T lint -W warning table-ldap_perl.8
