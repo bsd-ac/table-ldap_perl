@@ -36,15 +36,16 @@ sub config_parse {
                 }
             }
         }
-}
-}
-
-# LDAP
-my $ldap = undef;
-sub ldap_init {
-    $ldap = Net::LDAP->new( ${$config}{"_"}{"server"} )  or  die "$@";
-    my $mesg = $ldap->bind(${$config}{"_"}{"admin"}, password => ${$config}{"_"}{"password"});
-    $mesg->code and die $mesg->error;
+    }
+    foreach my $domain (keys %{$config}){
+        unless ($domain eq "_"){
+            my $ldap = Net::LDAP->new( ${$config}{$domain}{"server"} );
+            my $mesg = $ldap->bind(${$config}{$domain}{"admin"}, password => ${$config}{$domain}{"password"});
+            $mesg->code and die $mesg->error;
+            ${$config}{$domain}{"ldap"} = $ldap;
+        }
+    }
+    $status = 1;
 }
 
 # HELPERS
@@ -60,9 +61,12 @@ my %commands = ();
 
 $commands{"UPDATE"} = sub {
     eval {
-        scalar(@_) != 0 and die;
+        foreach my $domain (keys %{$config}){
+            unless($domain eq "_"){
+                ${$config}{$domain}{"ldap"}->unbind;
+            }
+        }
         config_parse();
-        ldap_init();
         $status = 1;
         print "TABLE_RESULT|UPDATED\n";
     } or do {
@@ -87,6 +91,7 @@ $commands{"LOOKUP"} = sub {
                 my $aliases = ${$config}{$hostname}{"aliases"};
                 my $alias = ${$config}{$hostname}{"alias"};
                 my $name = ${$config}{$hostname}{"name"};
+                my $ldap = ${$config}{$hostname}{"ldap"};
                 my $srch = $ldap->search(base => "ou=$aliases,$dc", filter => "($alias=$key)");
                 $srch->code and  die $srch->error;
                 my @alias_list = ();
@@ -101,7 +106,11 @@ $commands{"LOOKUP"} = sub {
                 $key = $address->address();
                 my ($username, $hostname) = $address->split_address();
                 my $dc = hostname_to_dc($hostname);
-                my $srch = $ldap->search(base => "ou=Users,$dc", filter => "(mail=$key)");
+                my $ldap = ${$config}{$hostname}{"ldap"};
+                my $srch = $ldap->search(
+                    base   => "ou=Users,$dc",
+                    filter => "(mail=$key)"
+                );
                 $srch->code and  die $srch->error;
                 $srch->count != 1 and die;
                 my $entry = ($srch->entries)[0];
@@ -133,8 +142,6 @@ my $proto_version = $params[0];
 my $timeout = $params[1];
 
 config_parse();
-ldap_init();
-$status=1;
 
 print "TABLE_RESULT|READY\n";
 
