@@ -71,6 +71,10 @@ The attribute of an alias which points to the real email address.
 .It Ar name = cn
 .Pp
 The attribute of an alias which has the aliased email address.
+.Pp
+.It Ar password = userPassword
+.Pp
+The attribute of a user which has the password used by OpenSMTPD.
 .El
 .Sh EXAMPLES
 Consider the following LDAP tree:
@@ -106,6 +110,7 @@ aliases=Aliases
 mail=mail
 alias=sn
 name=cn
+password=userPassword
 
 [example.tld]
 

@@ -106,15 +106,16 @@ $commands{"LOOKUP"} = sub {
                 $key = $address->address();
                 my ($username, $hostname) = $address->split_address();
                 my $dc = hostname_to_dc($hostname);
+                my $mail = ${$config}{$hostname}{"mail"};
                 my $ldap = ${$config}{$hostname}{"ldap"};
                 my $srch = $ldap->search(
                     base   => "ou=Users,$dc",
-                    filter => "(mail=$key)"
+                    filter => "($mail=$key)"
                 );
                 $srch->code and  die $srch->error;
                 $srch->count != 1 and die;
                 my $entry = ($srch->entries)[0];
-                my $password = $entry->get_value("userPassword");
+                my $password = $entry->get_value(${$config}{$hostname}{"password"});
                 print "TABLE_RESULT|$password\n";
             }
             default { print "TABLE_RESULT|FAILED\n";}
