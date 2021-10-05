@@ -23,7 +23,7 @@
 .Op Fl f Ar config_file
 .Sh DESCRIPTION
 .Nm
-is an table backend for OpenSMTPD, serving the API described in
+is an table backend for OpenSMTPD, serving a partial slice of the API described in
 .Xr table 5 .
 The default configuration file is
 .Pa /etc/table-ldap_perl.ini .
@@ -83,16 +83,24 @@ Consider the following LDAP tree:
   .
   |-- dc=example,dc=tld
   |   |-- ou=Users
-  |   |   |-- cn=Jane,mail=jane@example.tld
-  |   |   |-- cn=John,mail=john@example.tld
+  |   |   |-- cn=Jane,mail=jane@example.tld,userPassword=abc,
+  |   |   |   uidNumber=1000,gidNumber=1000,home=/home/jane
+  |   |   |
+  |   |   |-- cn=John,mail=john@example.tld,userPassword=xyz
+  |   |       uidNumber=1001,gidNumber=1001,home=/home/john
+  |   |
   |   |-- ou=Aliases
   |       |-- cn=bossjane@example.tld,sn=jane@example.tld
   |       |-- cn=bossjohn@example.tld,sn=jane@example.tld
   |
   |-- dc=another,dc=xyz
       |-- ou=People
-      |   |-- firstName=Jack,mail=jack@another.xyz
-      |   |-- firstName=Jade,mail=jade@another.xyz
+      |   |-- firstName=Jack,mail=jack@another.xyz,pwd=123,
+      |   |   uid=1010,gid=1010,homeDirectory=/var/home/jack
+      |   |
+      |   |-- firstName=Jade,mail=jade@another.xyz,pwd=456,
+      |       uid=1011,gid=1011,homeDirectory=/var/home/jade
+      |
       |-- ou=Aliases
           |-- cn=bossjack@another.xyz,sn=jack@another.xyz
           |-- cn=bossjade@another.xyz,sn=jade@another.xyz
@@ -111,11 +119,27 @@ mail=mail
 alias=sn
 name=cn
 password=userPassword
+uid = uidNumber
+gid = gidNumber
+home = homeDirectory
 
 [example.tld]
+home=home
 
 [another.xyz]
 users=People
 name=firstName
+uid=uid
+gid=gid
+password=pwd
 
 .Ed
+.Sh CAVEATS
+Currently only the following specs are implemented with a
+focus on LDAP compatibility:
+.Bl -tag -width Ds -compact
+.It ALIAS
+.It CREDENTIALS
+.It DOMAIN
+.It USERINFO
+.El
