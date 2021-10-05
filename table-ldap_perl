@@ -77,7 +77,6 @@ $commands{"UPDATE"} = sub {
 
 $commands{"LOOKUP"} = sub {
     eval {
-        scalar(@_) != 2 and die;
         $status != 1 and die;
         my $service = $_[0];
         my $key = $_[1];
@@ -118,19 +117,33 @@ $commands{"LOOKUP"} = sub {
                 my $password = $entry->get_value(${$config}{$hostname}{"password"});
                 print "TABLE_RESULT|$password\n";
             }
-            default { print "TABLE_RESULT|FAILED\n";}
+            default { die; }
         }
         1;
-    } or do {
+}
+  or do {
         print "TABLE_RESULT|FAILED\n";
     }
 };
 
 $commands{"FETCH"} = sub {
     eval {
-        scalar(@_) != 1 and die;
         $status != 1 and die;
         my $service = $_[0];
+        given($service) {
+            when("DOMAIN"){
+                my @domains = ();
+                foreach my $domain (keys %{$config}){
+                    unless($domain eq "_"){
+                        push @domains, $domain;
+                    }
+                }
+                print "TABLE_RESULT|", join(",", @domains), "\n";
+            }
+            default{
+                die;
+            }
+        }
     } or do {
         print "TABLE_RESULT|FAILED\n";
     }
@@ -147,6 +160,7 @@ config_parse();
 print "TABLE_RESULT|READY\n";
 
 foreach $line ( <STDIN> ) {
+    chop($line);
     my @terms = split('\|', $line);
     my $command = $terms[3];
     if (exists $commands{$command}){
