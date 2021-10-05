@@ -105,10 +105,11 @@ $commands{"LOOKUP"} = sub {
                 $key = $address->address();
                 my ($username, $hostname) = $address->split_address();
                 my $dc = hostname_to_dc($hostname);
+                my $users = ${$config}{$hostname}{"users"};
                 my $mail = ${$config}{$hostname}{"mail"};
                 my $ldap = ${$config}{$hostname}{"ldap"};
                 my $srch = $ldap->search(
-                    base   => "ou=Users,$dc",
+                    base   => "ou=$users,$dc",
                     filter => "($mail=$key)"
                 );
                 $srch->code and  die $srch->error;
@@ -116,6 +117,31 @@ $commands{"LOOKUP"} = sub {
                 my $entry = ($srch->entries)[0];
                 my $password = $entry->get_value(${$config}{$hostname}{"password"});
                 print "TABLE_RESULT|$password\n";
+            }
+            when("USERINFO"){
+                my $address = Email::Address::XS->parse_bare_address($key);
+                $address->is_valid() or die;
+                $key = $address->address();
+                my ($username, $hostname) = $address->split_address();
+                my $dc = hostname_to_dc($hostname);
+                my $users = ${$config}{$hostname}{"users"};
+                my $mail = ${$config}{$hostname}{"mail"};
+                my $ldap = ${$config}{$hostname}{"ldap"};
+                my $srch = $ldap->search(
+                    base   => "ou=$users,$dc",
+                    filter => "($mail=$key)"
+                );
+                $srch->code and  die $srch->error;
+                $srch->count != 1 and die;
+                my $entry = ($srch->entries)[0];
+                my $uid = ${$config}{$hostname}{"uid"};
+                my $gid = ${$config}{$hostname}{"gid"};
+                my $home = ${$config}{$hostname}{"home"};
+                my @values = ();
+                foreach my $attr ( $uid, $gid, $home ) {
+                    push @values, $entry->get_value($attr);
+                }
+                print "TABLE_RESULT|", join(":", @values), "\n";
             }
             default { die; }
         }
