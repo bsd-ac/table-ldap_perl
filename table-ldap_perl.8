@@ -95,3 +95,22 @@ Consider the following LDAP tree:
           |-- cn=bossjane@another.xyz,sn=jane@example.tld
 
 .Ed
+The above tree can be configured using the following ini file:
+.Bd -literal -offset width
+
+server=ldap.example.tld
+admin=cn=admin,dc=bsd,dc=ac
+password=xxxx
+users=Users
+aliases=Aliases
+mail=mail
+alias=sn
+name=cn
+
+[example.tld]
+
+[another.xyz]
+users=People
+name=firstName
+
+.Ed

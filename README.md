@@ -1,5 +1,7 @@
 # table-ldap_perl
 
+[![pipeline](https://github.com/bsd-ac/table-ldap_perl/actions/workflows/pipeline.yml/badge.svg)](https://github.com/bsd-ac/table-ldap_perl/actions/workflows/pipeline.yml)
+
 LDAP table backend for OpenSMTPD
 
 ## Installation
